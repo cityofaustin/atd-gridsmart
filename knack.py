@@ -9,13 +9,16 @@ knack_object_id = os.getenv("GS_KNACK_OBJECT_ID")
 knack_app_id = os.getenv("GS_KNACK_APP_ID")
 knack_api_id = os.getenv("GS_KNACK_API_KEY")
 
+
+
+
 #
 # Gather GRIDSMART devices
 #
 gs_type = {
    'match': 'or',
    'rules': [{
-        'filed': knack_field_id,
+        'field': knack_field_id,
         'operator': 'is',
         'value': 'GRIDSMART'
     }]

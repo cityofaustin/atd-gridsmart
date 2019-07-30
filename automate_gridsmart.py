@@ -43,24 +43,21 @@ knack_response = knackpy.Knack(
 #
 # Iterate through each camera
 #
-for detector in knack_response.data_raw:
-    print(detector)
-print(len(knack_response.data_raw))
-print(type(knack_response.data_raw))
 
-#cleaning up ips
+# # For debugging purposes:
+# for detector in knack_response.data_raw:
+#     print(detector)
 
-for x in range(len(knack_response.data_raw)):
-   knack_response.data_raw[x] = knack_response.data_raw[x].strip()
+# print("Total Detectors Count: " + str(len(knack_response.data_raw)))
+# print("Data Raw object type: " + str(type(knack_response.data_raw)))
 
-def Remove(duplicate=[]):
-   IPs = []
-   for uni in duplicate:
-       if uni not in IPs:
-           IPs.append(uni)
-   return IPs
+# Cleaning up IP addresses, using a lambda function and output a list
+detectors_ip_list = list(
+    map(lambda nth_element: str(nth_element['DETECTOR_IP']).strip(), knack_response.data)
+)
 
-Unique_IPs = Remove(knack_response.data_raw)
+# Let's remove duplicates my getting unique keys from the dict.fromkeys function
+Unique_IPs = list(dict.fromkeys(detectors_ip_list))
 
 #the following section is for checking the status of the ips
 goodvevil = dict()
@@ -72,7 +69,10 @@ for x in range(len(Unique_IPs)):
        #this sections makes an http request, might need to add checks for multiple cameras?
        status = requests.get(f'https://{ip}:8902/api/camera', timeout=10)
        print("Status: " + status.text)
-       goodvevil[ip] = "ActiveCamera" 'in status.text (not sure what this line does?)
+       # "ActiveCamera" in status.text evaluates if the string is contained
+       # in the status.text variable. The result of the evaluation (true or false)
+       # will be then assigned to goodvevil[ip]
+       goodvevil[ip] = "ActiveCamera" in status.text
 
 
    except requests.exceptions.RequestException as e:

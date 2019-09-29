@@ -54,6 +54,10 @@ goodvevil = dict()
 #Minor changes to this loop here: we are going to check the two ports that we know
 #the Gridsmarts respond to now.
 for x in range(len(Unique_IPs)):
+    #This successFlag variable is used to make sure we don't check
+    #the same camera IP twice on different ports.  We set it here so that
+    #it defaults to zero on each loop and has to be set by the try/except for each camera.
+    successFlag = 0
     ip = Unique_IPs[x]
     print("Checking status for camera: " + ip)
     try:
@@ -64,24 +68,27 @@ for x in range(len(Unique_IPs)):
         # in the status.text variable. The result of the evaluation (true or false)
         # will be then assigned to goodvevil[ip]
         goodvevil[ip] = "ActiveCamera" in status.text
+        successFlag = 1
 
 
     except requests.exceptions.RequestException as e:
         #this catches errors for the http request and marks the ip as offline
         print("Exception for: " + ip + " port 8902, message: " + str(e))
         goodvevil[ip] = False
+        successFlag = 0
     
     #second request, on another port!
+    # I think putting this in it's own try/except loop may be a mistake.
+    # Now it has an if case so that if the first check worked, the second one
+    # won't happen.
+    if successFlag == 0:
+        try:
+            status = requests.get(f'http://{ip}:80/api/camera', timeout=10)
+            print("Status (port 80): " + status.text)
+            goodvevil[ip] = "ActiveCamera" in status.text
+        except requests.exceptions.RequestException as e:
+            print("Exception for: " + ip + " port 80, message: " + str(e))
+            goodvevil[ip] = False
 
-    try:
-        status = requests.get(f'http://{ip}:80/api/camera', timeout=10)
-        print("Status (port 80): " + status.text)
-        goodvevil[ip] = "ActiveCamera" in status.text
-    
-
-    except requests.exceptions.RequestException as e:
-        print("Exception for: " + ip + " port 80, message: " + str(e))
-        goodvevil[ip] = False
-		
 for key, value in goodvevil.items():
   print(key, value)

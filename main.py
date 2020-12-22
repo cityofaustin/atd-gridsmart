@@ -1,44 +1,94 @@
-import pandas as pd
+#Basically a variation on the old automate_gridsmart.py script.  Now it checks two ports with its requests! 
+# - William Howland
+
+#Imported arrow and requests because Knackpy's github documentation mentions needing it. 
+import knackpy
+import os
 import requests
+import arrow
 
-#reading local file for ips
 
-df = pd.read_csv("grid_smarts.csv")
-IP_Adds = df['Detector IP'].dropna().tolist()
+#
+# First, we need to gather sensitive data.
+#
+# (Borrowed from automate_gridsmart.py)
+knack_field_id = os.getenv("GS_KNACK_FIELD_ID")
+knack_object_id = os.getenv("GS_KNACK_OBJECT_ID")
+knack_app_id = os.getenv("GS_KNACK_APP_ID")
+knack_api_id = os.getenv("GS_KNACK_API_KEY")
+#
+# Gather GRIDSMART devices (borrowed from automate_gridsmart.py)
+#
+gs_type = {
+   'match': 'or',
+   'rules': [{
+        'field': knack_field_id,
+        'operator': 'is',
+        'value': 'GRIDSMART'
+    }]
+}
 
-#cleaning up ips
+#Execute through knackpy, borrowed from the automate_gridsmart.py script, since we will be retrieving data from
+#the same object anyways.
 
-for x in range(len(IP_Adds)):
-   IP_Adds[x] = IP_Adds[x].strip()
+knack_response = knackpy.Knack(
+   obj=knack_object_id,
+   app_id=knack_app_id,
+   api_key=knack_api_id,
+   filters=gs_type
+)
 
-def Remove(duplicate=[]):
-   IPs = []
-   for uni in duplicate:
-       if uni not in IPs:
-           IPs.append(uni)
-   return IPs
+# Cleaning up IP addresses, using a lambda function and output a list
+# again, from automate_gridsmart.py
+detectors_ip_list = list(
+    map(lambda nth_element: str(nth_element['DETECTOR_IP']).strip(), knack_response.data)
+)
 
-Unique_IPs = Remove(IP_Adds)
+# Let's remove duplicates my getting unique keys from the dict.fromkeys function
+#from automate_gridsmart.py
+Unique_IPs = list(dict.fromkeys(detectors_ip_list))
 
-#the following section is for checking the status of the ips
+#Now we can try to make requests on GridSmarts.  
 goodvevil = dict()
 
+#Minor changes to this loop here: we are going to check the two ports that we know
+#the Gridsmarts respond to now.
 for x in range(len(Unique_IPs)):
-   ip = Unique_IPs[x]
-   print("Checking status for camera: " + ip)
-   try:
-       #this sections makes an http request, might need to add checks for multiple cameras?
-       status = requests.get(f'https://{ip}:8902/api/camera', timeout=10)
-       print("Status: " + status.text)
-       goodvevil[ip] = "ActiveCamera" in status.text
+    #This successFlag variable is used to make sure we don't check
+    #the same camera IP twice on different ports.  We set it here so that
+    #it defaults to zero on each loop and has to be set by the try/except for each camera.
+    successFlag = 0
+    ip = Unique_IPs[x]
+    print("Checking status for camera: " + ip)
+    try:
+        #this sections makes an http request, might need to add checks for multiple cameras?
+        status = requests.get(f'http://{ip}:8902/api/camera', timeout=10)
+        print("Status (port 8902): " + status.text)
+        # "ActiveCamera" in status.text evaluates if the string is contained
+        # in the status.text variable. The result of the evaluation (true or false)
+        # will be then assigned to goodvevil[ip]
+        goodvevil[ip] = "ActiveCamera" in status.text
+        successFlag = 1
 
 
-   except requests.exceptions.RequestException as e:
-       #this catches errors for the http request and marks the ip as offline
-       print("Exception for: " + ip + ", message: " + str(e))
-       goodvevil[ip] = False
+    except requests.exceptions.RequestException as e:
+        #this catches errors for the http request and marks the ip as offline
+        print("Exception for: " + ip + " port 8902, message: " + str(e))
+        goodvevil[ip] = False
+        successFlag = 0
+    
+    #second request, on another port!
+    # I think putting this in it's own try/except loop may be a mistake.
+    # Now it has an if case so that if the first check worked, the second one
+    # won't happen.
+    if successFlag == 0:
+        try:
+            status = requests.get(f'http://{ip}:80/api/camera', timeout=10)
+            print("Status (port 80): " + status.text)
+            goodvevil[ip] = "ActiveCamera" in status.text
+        except requests.exceptions.RequestException as e:
+            print("Exception for: " + ip + " port 80, message: " + str(e))
+            goodvevil[ip] = False
 
 for key, value in goodvevil.items():
   print(key, value)
-
-
